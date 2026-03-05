@@ -11,6 +11,7 @@ Contents
    :maxdepth: 2
 
    Overview <readme>
+   Examples <examples>
    Contributions & Help <contributing>
    License <license>
    Authors <authors>

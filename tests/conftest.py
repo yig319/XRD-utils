@@ -1,18 +1,11 @@
 """Shared pytest fixtures for XRD-tools."""
 
-import sys
-from pathlib import Path
-
 import matplotlib
 import pytest
 
 # Use a non-interactive backend so tests run in headless CI.
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
-SRC_DIR = Path(__file__).resolve().parents[1] / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
 
 
 @pytest.fixture(autouse=True)

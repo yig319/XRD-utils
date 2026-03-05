@@ -44,6 +44,18 @@ Quick Start
    peak_x, peak_y = detect_peaks(x, y, num_peaks=1, prominence=0.1)
    fwhm, amp, left, right = calculate_fwhm(x, y, peak_x[0])
 
+Runnable Demo
+=============
+
+Try a full synthetic workflow (peak detection, FWHM, alignment, and plotting):
+
+.. code-block:: bash
+
+   # from repo root
+   PYTHONPATH=src python examples/demo_xrd_scan.py
+
+This writes a demo figure to ``examples/output/demo_xrd_scan.png``.
+
 Features
 ========
 
