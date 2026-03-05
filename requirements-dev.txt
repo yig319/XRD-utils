@@ -1,0 +1,11 @@
+# Development requirements.
+# Includes runtime dependencies plus test/build/doc tooling.
+-r requirements.txt
+
+pytest
+pytest-cov
+tox
+build
+twine
+sphinx>=3.2.1
+pydata-sphinx-theme

@@ -1,0 +1,7 @@
+# Documentation requirements.
+# Reuse package runtime requirements from the repository root.
+-r ../requirements.txt
+
+# Sphinx and docs theme
+sphinx>=3.2.1
+pydata-sphinx-theme

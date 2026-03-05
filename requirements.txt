@@ -1,0 +1,6 @@
+# Runtime dependencies for XRD-tools.
+# Keep this file as the single source of truth for package dependencies.
+numpy>=1.21.0
+matplotlib>=3.5.0
+scipy>=1.7.0
+xrayutilities
