@@ -2,7 +2,7 @@
 Contributing
 ============
 
-Thanks for contributing to XRD-tools.
+Thanks for contributing to XRD-utils.
 
 Report Bugs or Request Features
 ===============================

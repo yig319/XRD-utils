@@ -91,7 +91,7 @@ source_suffix = ".rst"
 master_doc = "index"
 
 # General information about the project.
-project = "XRD-tools"
+project = "XRD-utils"
 copyright = "2026, Yichen Guo"
 
 # The version info for the project you're documenting, acts as replacement for
@@ -249,7 +249,7 @@ html_last_updated_fmt = "%b %d, %Y"
 # html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = "XRD-tools-doc"
+htmlhelp_basename = "XRD-utils-doc"
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -266,7 +266,7 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-    ("index", "user_guide.tex", "XRD-tools Documentation", "Yichen Guo", "manual")
+    ("index", "user_guide.tex", "XRD-utils Documentation", "Yichen Guo", "manual")
 ]
 
 # The name of an image file (relative to this directory) to place at the top of

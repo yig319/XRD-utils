@@ -1,5 +1,5 @@
 """
-    Setup file for XRD-tools.
+    Setup file for XRD-utils.
     Use setup.cfg to configure your project.
 
     This file was generated with PyScaffold 4.6.

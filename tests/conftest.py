@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for XRD-tools."""
+"""Shared pytest fixtures for XRD-utils."""
 
 import matplotlib
 import pytest

@@ -1,8 +1,8 @@
 =========
-XRD-tools
+XRD-utils
 =========
 
-XRD-tools documentation for installation, usage, and API reference.
+XRD-utils documentation for installation, usage, and API reference.
 
 Contents
 ========

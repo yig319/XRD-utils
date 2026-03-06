@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runnable synthetic demo for XRD-tools.
+"""Runnable synthetic demo for XRD-utils.
 
 This script generates three synthetic XRD scans, analyzes peaks/FWHM, aligns
 the scans, and saves a side-by-side visualization.
@@ -79,7 +79,7 @@ def build_demo_scans(seed: int = 2026):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run XRD-tools synthetic demo.")
+    parser = argparse.ArgumentParser(description="Run XRD-utils synthetic demo.")
     parser.add_argument(
         "--output",
         default="examples/output/demo_xrd_scan.png",

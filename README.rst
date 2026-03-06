@@ -1,8 +1,8 @@
 =========
-XRD-tools
+XRD-utils
 =========
 
-XRD-tools is a Python package for loading, aligning, analyzing, and visualizing
+XRD-utils is a Python package for loading, aligning, analyzing, and visualizing
 X-ray diffraction (XRD) data, including line scans and reciprocal space maps.
 
 Project Links
@@ -10,7 +10,7 @@ Project Links
 
 - Source: https://github.com/yig319/XRD-tools
 - Issues: https://github.com/yig319/XRD-tools/issues
-- PyPI: https://pypi.org/project/XRD-tools/
+- PyPI: https://pypi.org/project/XRD-utils/
 
 Installation
 ============
@@ -19,7 +19,7 @@ Install from PyPI:
 
 .. code-block:: bash
 
-   pip install XRD-tools
+   pip install XRD-utils
 
 Install from source:
 
