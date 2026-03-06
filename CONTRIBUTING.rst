@@ -7,7 +7,7 @@ Thanks for contributing to XRD-utils.
 Report Bugs or Request Features
 ===============================
 
-- Search existing issues first: https://github.com/yig319/XRD-tools/issues
+- Search existing issues first: https://github.com/yig319/XRD-utils/issues
 - Open a new issue with:
   - operating system and Python version
   - clear reproduction steps
@@ -18,8 +18,8 @@ Development Setup
 
 .. code-block:: bash
 
-   git clone https://github.com/yig319/XRD-tools.git
-   cd XRD-tools
+   git clone https://github.com/yig319/XRD-utils.git
+   cd XRD-utils
    python -m venv .venv
    source .venv/bin/activate
    pip install -U pip

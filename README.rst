@@ -8,8 +8,8 @@ X-ray diffraction (XRD) data, including line scans and reciprocal space maps.
 Project Links
 =============
 
-- Source: https://github.com/yig319/XRD-tools
-- Issues: https://github.com/yig319/XRD-tools/issues
+- Source: https://github.com/yig319/XRD-utils
+- Issues: https://github.com/yig319/XRD-utils/issues
 - PyPI: https://pypi.org/project/XRD-utils/
 
 Installation
@@ -25,8 +25,8 @@ Install from source:
 
 .. code-block:: bash
 
-   git clone https://github.com/yig319/XRD-tools.git
-   cd XRD-tools
+   git clone https://github.com/yig319/XRD-utils.git
+   cd XRD-utils
    pip install -e .
 
 Quick Start

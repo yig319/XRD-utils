@@ -168,7 +168,7 @@ html_theme_options = {
     "icon_links": [
         {
             "name": "GitHub",
-            "url": "https://github.com/yig319/XRD-tools",
+            "url": "https://github.com/yig319/XRD-utils",
             "icon": "fab fa-github-square",
             "type": "fontawesome",
         },
