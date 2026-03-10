@@ -4,7 +4,7 @@ console script. To run this script uncomment the following lines in the
 ``[options.entry_points]`` section in ``setup.cfg``::
 
     console_scripts =
-         fibonacci = xrd_learn.skeleton:run
+         fibonacci = xrd_utils.skeleton:run
 
 Then run ``pip install .`` (or ``pip install -e .`` for editable mode)
 which will install the command ``fibonacci`` inside your current environment.
@@ -24,7 +24,7 @@ import argparse
 import logging
 import sys
 
-from xrd_learn import __version__
+from xrd_utils import __version__
 
 __author__ = "Yichen Guo"
 __copyright__ = "Yichen Guo"
@@ -36,7 +36,7 @@ _logger = logging.getLogger(__name__)
 # ---- Python API ----
 # The functions defined in this section can be imported by users in their
 # Python scripts/interactive interpreter, e.g. via
-# `from xrd_learn.skeleton import fib`,
+# `from xrd_utils.skeleton import fib`,
 # when using this Python module as a library.
 
 
@@ -144,6 +144,6 @@ if __name__ == "__main__":
     # After installing your project with pip, users can also run your Python
     # modules as scripts via the ``-m`` flag, as defined in PEP 338::
     #
-    #     python -m xrd_learn.skeleton 42
+    #     python -m xrd_utils.skeleton 42
     #
     run()

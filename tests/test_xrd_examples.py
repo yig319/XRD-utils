@@ -19,11 +19,11 @@ def _load_module(name, path):
 @pytest.fixture(scope="module")
 def xrd_modules():
     """Load local source modules with a stubbed ``xrayutilities`` backend."""
-    src_dir = Path(__file__).resolve().parents[1] / "src" / "xrd_learn"
+    src_dir = Path(__file__).resolve().parents[1] / "src" / "xrd_utils"
 
-    pkg = types.ModuleType("xrd_learn")
+    pkg = types.ModuleType("xrd_utils")
     pkg.__path__ = [str(src_dir)]
-    sys.modules["xrd_learn"] = pkg
+    sys.modules["xrd_utils"] = pkg
 
     fake_xu = types.ModuleType("xrayutilities")
     fake_xu.io = types.SimpleNamespace()
@@ -65,17 +65,17 @@ def xrd_modules():
     fake_xu.io.panalytical_xml.getxrdml_map = _map
     sys.modules["xrayutilities"] = fake_xu
 
-    xrd_utils = _load_module("xrd_learn.xrd_utils", src_dir / "xrd_utils.py")
-    xrd_viz = _load_module("xrd_learn.xrd_viz", src_dir / "xrd_viz.py")
-    rsm_viz = _load_module("xrd_learn.rsm_viz", src_dir / "rsm_viz.py")
+    xrd_utils = _load_module("xrd_utils.xrd_utils", src_dir / "xrd_utils.py")
+    xrd_viz = _load_module("xrd_utils.xrd_viz", src_dir / "xrd_viz.py")
+    rsm_viz = _load_module("xrd_utils.rsm_viz", src_dir / "rsm_viz.py")
 
     yield xrd_utils, xrd_viz, rsm_viz
 
     for name in [
-        "xrd_learn.rsm_viz",
-        "xrd_learn.xrd_viz",
-        "xrd_learn.xrd_utils",
-        "xrd_learn",
+        "xrd_utils.rsm_viz",
+        "xrd_utils.xrd_viz",
+        "xrd_utils.xrd_utils",
+        "xrd_utils",
         "xrayutilities",
     ]:
         sys.modules.pop(name, None)

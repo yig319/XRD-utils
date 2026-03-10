@@ -9,21 +9,21 @@ import pytest
 @pytest.fixture(scope="module")
 def skeleton_module():
     """Load ``skeleton.py`` from local source without requiring package install."""
-    src_pkg = Path(__file__).resolve().parents[1] / "src" / "xrd_learn"
+    src_pkg = Path(__file__).resolve().parents[1] / "src" / "xrd_utils"
 
-    pkg = types.ModuleType("xrd_learn")
+    pkg = types.ModuleType("xrd_utils")
     pkg.__path__ = [str(src_pkg)]
     pkg.__version__ = "0.0.test"
-    sys.modules["xrd_learn"] = pkg
+    sys.modules["xrd_utils"] = pkg
 
-    spec = spec_from_file_location("xrd_learn.skeleton", src_pkg / "skeleton.py")
+    spec = spec_from_file_location("xrd_utils.skeleton", src_pkg / "skeleton.py")
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
-    sys.modules["xrd_learn.skeleton"] = module
+    sys.modules["xrd_utils.skeleton"] = module
 
     yield module
 
-    for name in ["xrd_learn.skeleton", "xrd_learn"]:
+    for name in ["xrd_utils.skeleton", "xrd_utils"]:
         sys.modules.pop(name, None)
 
 

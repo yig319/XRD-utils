@@ -14,7 +14,7 @@ References:
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colormaps
-from xrd_learn.xrd_utils import process_input
+from xrd_utils.xrd_utils import process_input
 
 __author__ = "Yichen Guo"
 __copyright__ = "Yichen Guo"

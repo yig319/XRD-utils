@@ -29,13 +29,33 @@ Install from source:
    cd XRD-utils
    pip install -e .
 
+Clone On A New Desktop
+======================
+
+From a fresh machine, use:
+
+.. code-block:: bash
+
+   git clone https://github.com/yig319/XRD-utils.git
+   cd XRD-utils
+   python -m venv .venv
+   source .venv/bin/activate
+   pip install -U pip
+   pip install -r requirements-dev.txt
+   pip install -e .
+
+Notes:
+
+- ``requirements.txt`` contains runtime dependencies.
+- ``requirements-dev.txt`` includes runtime + test/build/docs tooling.
+
 Quick Start
 ===========
 
 .. code-block:: python
 
    import numpy as np
-   from xrd_learn.xrd_utils import detect_peaks, calculate_fwhm
+   from xrd_utils.xrd_utils import detect_peaks, calculate_fwhm
 
    # Example synthetic profile
    x = np.linspace(40, 50, 500)

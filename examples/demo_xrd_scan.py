@@ -40,25 +40,25 @@ def _ensure_xrayutilities_stub():
 _ensure_xrayutilities_stub()
 
 try:
-    from xrd_learn.xrd_utils import (
+    from xrd_utils.xrd_utils import (
         align_peak_to_value,
         align_peak_y_to_value,
         calculate_fwhm,
         detect_peaks,
     )
-    from xrd_learn.xrd_viz import plot_xrd
+    from xrd_utils.xrd_viz import plot_xrd
 except ModuleNotFoundError:
     repo_root = Path(__file__).resolve().parents[1]
     src_path = repo_root / "src"
     if str(src_path) not in sys.path:
         sys.path.insert(0, str(src_path))
-    from xrd_learn.xrd_utils import (  # type: ignore
+    from xrd_utils.xrd_utils import (  # type: ignore
         align_peak_to_value,
         align_peak_y_to_value,
         calculate_fwhm,
         detect_peaks,
     )
-    from xrd_learn.xrd_viz import plot_xrd  # type: ignore
+    from xrd_utils.xrd_viz import plot_xrd  # type: ignore
 
 
 def build_demo_scans(seed: int = 2026):
