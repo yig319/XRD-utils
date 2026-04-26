@@ -5,6 +5,7 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
+from sci_viz_utils.figures import set_axis_labels
 
 from xrd_utils.xrd_utils import load_xrd_scans, process_input
 
@@ -42,8 +43,7 @@ def plot_xrd(
             text_y = np.nanmax(y * scale) * text_offset_ratio[1]
             ax.text(text_x, text_y, label, fontsize=8, ha="right")
 
-    ax.set_xlabel("2theta or scan angle (deg)")
-    ax.set_ylabel("Intensity (a.u.)")
+    set_axis_labels(ax, xlabel="2theta or scan angle (deg)", ylabel="Intensity (a.u.)")
     if yscale:
         ax.set_yscale(yscale)
     if xrange:
@@ -69,8 +69,7 @@ def plot_stacked_scans(scans, ax=None, normalize: bool = True, offset: float = 1
         if normalize and np.nanmax(y) > 0:
             y = y / np.nanmax(y)
         ax.semilogy(x, y * (offset**i), label=name, linewidth=1.2)
-    ax.set_xlabel("2theta or scan angle (deg)")
-    ax.set_ylabel("Intensity (a.u.)")
+    set_axis_labels(ax, xlabel="2theta or scan angle (deg)", ylabel="Intensity (a.u.)")
     if xlim:
         ax.set_xlim(*xlim)
     if scans:

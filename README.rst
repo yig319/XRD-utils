@@ -64,6 +64,13 @@ Quick Start
    peak_x, peak_y = detect_peaks(x, y, num_peaks=1, prominence=0.1)
    fwhm, amp, left, right = calculate_fwhm(x, y, peak_x[0])
 
+Usage Guide
+===========
+
+See ``USAGE.md`` for a practical guide to scan loading, stacked plotting, peak
+tables, reciprocal-space maps, and the boundary between XRD-utils and
+``sci-viz-utils``.
+
 Runnable Demo
 =============
 
