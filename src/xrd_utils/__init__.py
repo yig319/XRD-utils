@@ -1,16 +1,29 @@
-import sys
+"""Utilities for XRD scan loading, peak analysis, and visualization."""
 
-if sys.version_info[:2] >= (3, 8):
-    # TODO: Import directly (no need for conditional) when `python_requires = >= 3.8`
-    from importlib.metadata import PackageNotFoundError, version  # pragma: no cover
-else:
-    from importlib_metadata import PackageNotFoundError, version  # pragma: no cover
+import sys
+from importlib import import_module
 
 try:
-    # Change here if project is renamed and does not equal the package name
-    dist_name = "XRD-utils"
-    __version__ = version(dist_name)
+    from importlib.metadata import PackageNotFoundError, version
+except Exception:  # pragma: no cover
+    from importlib_metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("XRD-utils")
 except PackageNotFoundError:  # pragma: no cover
     __version__ = "unknown"
-finally:
-    del version, PackageNotFoundError
+
+from xrd_utils.xrd_utils import *  # noqa: F401,F403,E402
+from xrd_utils.xrd_viz import *  # noqa: F401,F403,E402
+
+try:
+    from xrd_utils.rsm_viz import *  # noqa: F401,F403,E402
+except Exception:
+    pass
+
+for _name in ["rsm_viz", "skeleton", "xrd_utils", "xrd_viz"]:
+    try:
+        sys.modules[f"xrd_learn.{_name}"] = import_module(f"xrd_utils.{_name}")
+    except Exception:
+        pass
+

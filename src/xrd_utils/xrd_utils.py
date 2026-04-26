@@ -1,537 +1,261 @@
-"""
-This module provides functions for loading, aligning, and processing X-ray diffraction (XRD) scan data. 
-It supports loading scans from files, aligning peaks to specific values, and handling different types 
-of input data for processing. This module is essential for preparing XRD data for visualization 
-and further analysis.
+from __future__ import annotations
 
-Functions:
-    - load_xrd_scan: Load a single XRD scan from a file.
-    - load_xrd_scans: Load multiple XRD scans from a list of files.
-    - align_peak_to_value: Align the peak of an XRD scan to a target value, with optional visualization.
-    - process_input: Process input data of various types (file paths or pre-loaded data) to return 
-      XRD scan arrays.
-
-References:
-    - https://matplotlib.org/stable/contents.html
-    - https://xrayutilities.readthedocs.io/en/latest/
-"""
+import math
+import re
+import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import numpy as np
-import matplotlib.pyplot as plt
-from typing import Union, List, Tuple
-from scipy.signal import find_peaks
-from scipy.optimize import curve_fit
-from scipy.interpolate import interp1d
-from scipy.fft import fft, fftfreq
+import pandas as pd
 
 
-__author__ = "Yichen Guo"
-__copyright__ = "Yichen Guo"
-__license__ = "MIT"
+def _local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
 
 
-# def calculate_fwhm(X, Y, px, viz=False):
-#     """
-#     Calculate the Full Width at Half Maximum (FWHM) for a given peak.
-
-#     Parameters:
-#     -----------
-#     X : array-like
-#         X-axis data (e.g., 2θ values).
-#     Y : array-like
-#         Y-axis data (e.g., intensity values).
-#     px : int
-#         x-value of the peak for which to calculate FWHM.
-
-#     Returns:
-#     --------
-#     fwhm : float
-#         Full Width at Half Maximum (in the same units as x).
-#     """
-
-#     # Peak height (maximum intensity) and half maximum
-#     peak_indices = int(np.where(X == px)[0])
-#     peak_height = Y[X==px]
-#     half_max = peak_height / 2
-
-#     # Find the left and right points where intensity crosses half maximum
-#     left_idx = np.where(Y[:peak_indices] <= half_max)[0][-1]
-#     right_idx = np.where(Y[peak_indices:] <= half_max)[0][0] + peak_indices
-
-#     # Calculate FWHM as the difference in x-values at half maximum
-#     x_fwhm = X[right_idx] - X[left_idx]
-#     y_fwhm = Y[right_idx]
-    
-#     if viz:
-#         plt.figure(figsize=(8, 2))
-#         plt.plot(X, Y, label='Data')
-#         plt.axhline(half_max, color='gray', linestyle='--', label=f'Half Max = {half_max[0]:.4f}')
-#         plt.axvline(X[left_idx], color='orange', linestyle='--', label=f'Left FWHM = {X[left_idx]:.4f}')
-#         plt.axvline(X[right_idx], color='purple', linestyle='--', label=f'Right FWHM = {X[right_idx]:.4f}')
-#         plt.axvline(px, color='red', linestyle='-', label=f'Peak = {px}')
-#         plt.scatter([X[left_idx], X[right_idx]], [Y[left_idx], Y[right_idx]], color='black', zorder=5)
-#         plt.xlabel('X')
-#         plt.ylabel('Y')
-#         plt.title(f'FWHM Calculation (FWHM = {x_fwhm:.4f})')
-#         plt.legend()
-#         plt.show()
-        
-#     return x_fwhm, y_fwhm, X[left_idx], X[right_idx]  # Return FWHM and x-positions
+def _floats(text: str | None) -> list[float]:
+    if not text:
+        return []
+    return [float(x) for x in re.findall(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?", text)]
 
 
-import sys
-import types
-# --- Force override of scipy.misc BEFORE scipy is imported anywhere else ---
-# Define a fake scipy.misc module
-fake_misc = types.ModuleType("scipy.misc")
+def _load_xrdml_fallback(path: str | Path) -> pd.DataFrame:
+    path = Path(path)
+    root = ET.parse(path).getroot()
 
-def patched_derivative(func, x0, dx=1e-6, n=1):
-    if n != 1:
-        raise NotImplementedError("Only first derivative supported.")
-    return (func(x0 + dx) - func(x0 - dx)) / (2 * dx)
+    counts = None
+    for element in root.iter():
+        if _local_name(element.tag) in {"counts", "intensities"}:
+            values = _floats(element.text)
+            if values:
+                counts = np.asarray(values, dtype=float)
+                break
+    if counts is None:
+        raise ValueError(f"No counts or intensities found in {path}")
 
-fake_misc.derivative = patched_derivative
+    positions: dict[str, tuple[float | None, float | None, float | None]] = {}
+    for element in root.iter():
+        if _local_name(element.tag) != "positions":
+            continue
+        axis = element.attrib.get("axis", "angle")
+        start = end = common = None
+        for child in element:
+            name = _local_name(child.tag)
+            values = _floats(child.text)
+            if not values:
+                continue
+            if name == "startPosition":
+                start = values[0]
+            elif name == "endPosition":
+                end = values[0]
+            elif name == "commonPosition":
+                common = values[0]
+        positions[axis] = (start, end, common)
 
-# Inject the fake scipy.misc into sys.modules
-sys.modules["scipy.misc"] = fake_misc
+    scan_axis = None
+    for element in root.iter():
+        if _local_name(element.tag) == "scan":
+            scan_axis = element.attrib.get("scanAxis")
+            break
 
-# --- Now import the rest ---
-import xrayutilities as xu
+    preferred_axes: list[str] = []
+    if scan_axis:
+        preferred_axes.extend(part.strip() for part in re.split(r"[-,\s]+", scan_axis) if part.strip())
+    preferred_axes.extend(["2Theta", "Omega"])
 
+    axis_name = None
+    for axis in preferred_axes:
+        if axis in positions and positions[axis][0] is not None and positions[axis][1] is not None:
+            axis_name = axis
+            break
+    if axis_name is None:
+        for axis, (start, end, _common) in positions.items():
+            if start is not None and end is not None:
+                axis_name = axis
+                break
 
-def upsample_XY(X, Y, num_points=5000):
-    interp_func = interp1d(X, Y, kind='cubic')
-    # Define a finer grid for upsampling
-    X = np.linspace(np.min(X), np.max(X), num_points)  # New x with 100 points
-    Y = interp_func(X)  # Interpolated y values on the finer grid
-    return X, Y
-    
-    
-# Define Gaussian and Lorentzian functions for fitting
-def gaussian(x, a, x0, sigma):
-    return a * np.exp(-(x - x0)**2 / (2 * sigma**2))
-
-def lorentzian(x, a, x0, gamma):
-    return a * gamma**2 / ((x - x0)**2 + gamma**2)
-
-def calculate_fwhm(X, Y, px, fit_type='gaussian', viz=False):
-    """
-    Calculate the Full Width at Half Maximum (FWHM) for a given peak using Gaussian or Lorentzian fit.
-
-    Parameters:
-    -----------
-    X : array-like
-        X-axis data (e.g., 2θ values).
-    Y : array-like
-        Y-axis data (e.g., intensity values).
-    px : int
-        x-value of the peak for which to calculate FWHM.
-    fit_type : str, optional
-        Type of fit to use ('gaussian' or 'lorentzian'). Default is 'gaussian'.
-    viz : bool, optional
-        If True, a plot will be shown with the fit and FWHM. Default is False.
-
-    Returns:
-    --------
-    fwhm : float
-        Full Width at Half Maximum (in the same units as x).
-    """
-    # Select the fitting function based on fit_type
-    if fit_type == 'gaussian':
-        fit_func = gaussian
-    elif fit_type == 'lorentzian':
-        fit_func = lorentzian
+    if axis_name is None:
+        axis_name = "index"
+        x = np.arange(len(counts), dtype=float)
     else:
-        raise ValueError("fit_type must be 'gaussian' or 'lorentzian'")
+        start, end, _common = positions[axis_name]
+        x = np.linspace(float(start), float(end), len(counts))
 
-    # Initial guesses for the parameters
-    a_guess = np.max(Y)
-    x0_guess = X[np.argmax(Y)]
-    sigma_guess = (X[-1] - X[0]) / 4
-
-    # Fit the data
-    try:
-        params, _ = curve_fit(fit_func, X, Y, p0=[a_guess, x0_guess, sigma_guess])
-    except RuntimeError:
-        print("Fit did not converge.")
-        return None, None, None, None
-
-    # Extract the fitted parameters
-    a, x0, width_param = params
-
-    # Calculate FWHM based on the fitting function
-    if fit_type == 'gaussian':
-        fwhm = 2 * np.sqrt(2 * np.log(2)) * width_param  # FWHM for Gaussian
-    elif fit_type == 'lorentzian':
-        fwhm = 2 * width_param  # FWHM for Lorentzian
-    fwhm = abs(fwhm)  # Ensure FWHM is positive
-
-    if viz:
-        plt.figure(figsize=(8, 4))
-        plt.plot(X, Y, 'o', label='Data')
-        plt.plot(X, fit_func(X, *params), '-', label=f'{fit_type.capitalize()} Fit')
-        plt.axhline(a / 2, color='gray', linestyle='--', label=f'Half Max = {a / 2:.4f}')
-        plt.axvline(x0 - fwhm / 2, color='orange', linestyle='--', label=f'Left FWHM = {x0 - fwhm / 2:.4f}')
-        plt.axvline(x0 + fwhm / 2, color='purple', linestyle='--', label=f'Right FWHM = {x0 + fwhm / 2:.4f}')
-        plt.scatter([x0 - fwhm / 2, x0 + fwhm / 2], [a / 2, a / 2], color='black', zorder=5)
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.title(f'FWHM Calculation (FWHM = {fwhm:.4f})')
-        plt.legend()
-        plt.show()
-
-    return fwhm, a, x0 - fwhm / 2, x0 + fwhm / 2  # Return FWHM and x-positions of FWHM
+    return pd.DataFrame({"angle": x, "intensity": counts, "axis": axis_name, "source": str(path)})
 
 
-def detect_peaks(x, y, num_peaks=3, prominence=0.1, distance=None):
-    """
-    Detects a specified number of peaks in the given x-y curve.
+def load_xrd_scan(path: str | Path) -> pd.DataFrame:
+    """Load a 1D XRD scan from XRDML, CSV, TXT, or XY."""
+    path = Path(path)
+    suffix = path.suffix.lower()
+    if suffix == ".xrdml":
+        try:
+            import xrayutilities as xu
 
-    Parameters:
-    -----------
-    x : array-like
-        X-axis data (e.g., 2θ values).
-    y : array-like
-        Y-axis data (e.g., intensity values).
-    num_peaks : int
-        Number of top peaks to detect (default is 3).
-    prominence : float
-        Minimum prominence of peaks (default is 0.1).
-    distance : float or None
-        Minimum horizontal distance (in x-units) between peaks (optional).
+            out = xu.io.getxrdml_scan(str(path))
+            return pd.DataFrame(
+                {
+                    "angle": np.asarray(out[0], dtype=float).ravel(),
+                    "intensity": np.asarray(out[1], dtype=float).ravel(),
+                    "axis": "2Theta",
+                    "source": str(path),
+                }
+            )
+        except Exception:
+            return _load_xrdml_fallback(path)
 
-    Returns:
-    --------
-    peak_x : list
-        X-coordinates of detected peaks.
-    peak_y : list
-        Y-coordinates of detected peaks.
-    """
-    # Detect all peaks with the given prominence and distance
-    peaks, properties = find_peaks(y, prominence=prominence, distance=distance)
-
-    # Adjust number of peaks if fewer are detected
-    num_detected = len(peaks)
-    if num_detected < num_peaks:
-        print(f"Warning: Only {num_detected} peaks detected, fewer than requested.")
-        num_peaks = num_detected  # Use all available peaks
-
-
-    # Sort peaks by prominence and select the top ones
-    sorted_indices = sorted(range(len(peaks)), 
-                            key=lambda i: properties['prominences'][i], 
-                            reverse=True)[:num_peaks]
-    sorted_peaks = [peaks[i] for i in sorted_indices]
-    peak_x = [x[i] for i in sorted_peaks]
-    peak_y = [y[i] for i in sorted_peaks]
-    return peak_x, peak_y
+    df = pd.read_csv(path, comment="#", sep=None, engine="python", header=None)
+    numeric = df.apply(pd.to_numeric, errors="coerce").dropna(axis=1, how="all").dropna()
+    if numeric.shape[1] < 2:
+        raise ValueError(f"Expected at least two numeric columns in {path}")
+    return pd.DataFrame(
+        {
+            "angle": numeric.iloc[:, 0].to_numpy(float),
+            "intensity": numeric.iloc[:, 1].to_numpy(float),
+            "axis": "angle",
+            "source": str(path),
+        }
+    )
 
 
-def load_xrd_scan(file):
-    """Load a single XRD scan from a file.
-
-    This function reads an XRDML file and returns the scan data, including the 2-theta angles
-    and corresponding intensities.
-
-    Args:
-        file (str): Path to the XRDML file to be loaded.
-    
-    Returns:
-        tuple: A tuple containing X (2-theta angles) and Y (intensity values) arrays.
-    """
-    return xu.io.getxrdml_scan(file)
+def load_many_scans(files: list[str | Path]) -> dict[str, pd.DataFrame]:
+    return {Path(path).stem: load_xrd_scan(path) for path in files}
 
 
-def load_xrd_scans(files):
-    """Load multiple XRD scans from a list of files.
-
-    This function loads XRD scans from multiple XRDML files, returning the angles (Xs), intensities (Ys), 
-    and the length of each dataset for later processing or plotting.
-
-    Args:
-        files (list of str): A list of file paths for the XRDML files to be loaded.
-
-    Returns:
-        tuple: A tuple containing three lists:
-            - Xs: List of 2-theta angles for each file.
-            - Ys: List of intensity values for each file.
-            - length_list: List of lengths of the 2-theta arrays for each file.
-    """
-    Xs, Ys, length_list = [], [], []
-    for file in files:
-        out = xu.io.getxrdml_scan(file)
-        Xs.append(out[0])
-        Ys.append(out[1])
-        length_list.append(len(out[0]))
-    return Xs, Ys, length_list
+def load_xrd_scans(files: list[str | Path]):
+    """Load files into the tuple API used by the original notebooks."""
+    xs, ys, lengths = [], [], []
+    for path in files:
+        scan = load_xrd_scan(path)
+        x = scan["angle"].to_numpy(float)
+        y = scan["intensity"].to_numpy(float)
+        xs.append(x)
+        ys.append(y)
+        lengths.append(len(x))
+    return xs, ys, lengths
 
 
-def align_peak_to_value(Xs, Ys, target_x_peak, viz=False):
-    """Align the peak of XRD scans to a target value.
+def detect_peaks(x, y, num_peaks: int = 2, prominence: float = 0.1, distance: int = 10):
+    """Return peak x/y values sorted by x position."""
+    from scipy.signal import find_peaks
 
-    This function shifts the 2-theta values of XRD scans so that the peak of each scan aligns with a target
-    2-theta value. Optionally, a plot can be generated to visualize the original and shifted scans.
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    y_work = y - np.nanmin(y)
+    peaks, _ = find_peaks(y_work, prominence=prominence, distance=distance)
+    if len(peaks) == 0:
+        peaks = np.array([int(np.nanargmax(y_work))])
+    if len(peaks) > num_peaks:
+        order = np.argsort(y_work[peaks])[-num_peaks:]
+        peaks = peaks[order]
+    peaks = peaks[np.argsort(x[peaks])]
+    return x[peaks], y[peaks]
 
-    Args:
-        Xs (list of np.ndarray): List of 2-theta arrays for each scan.
-        Ys (list of np.ndarray): List of intensity arrays for each scan.
-        target_x_peak (float): The target 2-theta value to align the peaks to.
-        viz (bool, optional): If True, a plot will be shown comparing the original and shifted scans. 
-                              Default is False.
-    
-    Returns:
-        tuple: The shifted Xs and the original Ys arrays.
-    """
-    for i, (X, Y) in enumerate(zip(Xs, Ys)):
-        max_idx = np.argmax(Y)
-        current_x_peak = X[max_idx]
-        shift = target_x_peak - current_x_peak
-        X_shifted = X + shift
-        if viz:
-            plt.figure(figsize=(8, 1))
-            plt.plot(X, Y, color='tab:blue')
-            plt.plot(X_shifted, Y, color='tab:orange')
-            plt.axvline(current_x_peak, color='tab:blue', linestyle='--', linewidth=1, label=f'Original: {current_x_peak:.4f}')
-            plt.axvline(target_x_peak, color='tab:orange', linestyle='--', linewidth=1, label=f'Target: {target_x_peak:.4f}')
-            plt.yscale('log')
-            plt.legend()
-            plt.title(f'Peak: {current_x_peak:.4f} -> {target_x_peak:.4f}')
-            plt.show()
-        Xs[i] = X_shifted
-    return Xs, Ys
 
-def align_fwhm_center_to_value(Xs, Ys, target_x_peak, viz=False):
-    """
-    Align the center of the Full Width at Half Maximum (FWHM) of XRD scans to a target value.
-    
-    This function shifts the 2-theta values of XRD scans so that the center of the FWHM of each scan
-    aligns with a target 2-theta value. Optionally, a plot can be generated to visualize the original
-    and shifted scans.
-    
-    Args:
-        Xs (list of np.ndarray): List of 2-theta arrays for each scan.
-        Ys (list of np.ndarray): List of intensity arrays for each scan.
-        target_x_peak (float): The target 2-theta value to align the FWHM centers to.
-        viz (bool, optional): If True, a plot will be shown comparing the original and shifted scans.
-                              Default is False.
-    Returns:
-        tuple: The shifted Xs and the original Ys arrays.
-    """
-    fwhm_list = []
-    for i, (X, Y) in enumerate(zip(Xs, Ys)):
-        max_idx = np.argmax(Y)
-        current_x_peak = X[max_idx]
-        fwhm, y_fwhm, x_left, x_right = calculate_fwhm(X, Y, current_x_peak)
-        current_x_peak = (x_left + x_right) / 2
-        shift = target_x_peak - current_x_peak
-        X_shifted = X + shift
-        Xs[i] = X_shifted
+def calculate_fwhm(x, y, px: float, fit_type: str | None = None):
+    """Calculate FWHM around the peak nearest `px`."""
+    from scipy.signal import peak_widths
+
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    peak_index = int(np.argmin(np.abs(x - px)))
+    widths, height, left_ips, right_ips = peak_widths(y - np.nanmin(y), [peak_index], rel_height=0.5)
+    dx = float(np.nanmedian(np.diff(x))) if len(x) > 1 else 1.0
+    left_x = float(np.interp(left_ips[0], np.arange(len(x)), x))
+    right_x = float(np.interp(right_ips[0], np.arange(len(x)), x))
+    fwhm = float(widths[0] * abs(dx))
+    amplitude = float(y[peak_index])
+    return fwhm, amplitude, left_x, right_x
+
+
+def upsample_XY(x, y, num_points: int = 5000):
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    x_new = np.linspace(np.nanmin(x), np.nanmax(x), num_points)
+    y_new = np.interp(x_new, x, y)
+    return x_new, y_new
+
+
+def align_peak_to_value(Xs, Ys, target_x_peak: float, viz: bool = False):
+    out_xs, out_ys = [], []
+    for x, y in zip(Xs, Ys):
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        peak_x = x[int(np.nanargmax(y))]
+        out_xs.append(x + (target_x_peak - peak_x))
+        out_ys.append(y)
+    return out_xs, out_ys
+
+
+def align_fwhm_center_to_value(Xs, Ys, target_x_peak: float = 0, viz: bool = False):
+    out_xs, out_ys, fwhm_list = [], [], []
+    for x, y in zip(Xs, Ys):
+        peak_x = np.asarray(x)[int(np.nanargmax(y))]
+        fwhm, _amp, left, right = calculate_fwhm(x, y, peak_x)
+        center = (left + right) / 2
+        out_xs.append(np.asarray(x) + (target_x_peak - center))
+        out_ys.append(np.asarray(y))
         fwhm_list.append(fwhm)
-        if viz:
-            plt.figure(figsize=(8, 1))
-            plt.plot(X, Y, color='tab:blue')
-            plt.plot(X_shifted, Y, color='tab:orange')
-            plt.axvline(current_x_peak, color='tab:blue', linestyle='--', linewidth=1, label=f'Original: {current_x_peak:.4f}')
-            plt.axvline(target_x_peak, color='tab:orange', linestyle='--', linewidth=1, label=f'Target: {target_x_peak:.4f}')
-            plt.yscale('log')
-            plt.legend()
-            plt.title(f'Peak: {current_x_peak:.4f} -> {target_x_peak:.4f}')
-            plt.show()
-    return Xs, Ys, fwhm_list
+    return out_xs, out_ys, fwhm_list
 
-def align_peak_y_to_value(Xs, Ys, target_y_peak=None, use_global_max=False, viz=False):
-    """Align the peak intensity (Y value) of XRD scans to a target value.
 
-    This function scales the intensity values of each scan so that the maximum intensity 
-    aligns with a target Y peak value or the global maximum Y value across all scans. 
-    Optionally, a plot can be generated to visualize the original and scaled scans.
-
-    Args:
-        Xs (list of np.ndarray): List of 2-theta arrays for each scan.
-        Ys (list of np.ndarray): List of intensity arrays for each scan.
-        target_y_peak (float, optional): The target intensity value to align the peaks to.
-                                         Ignored if `use_global_max` is True.
-        use_global_max (bool, optional): If True, uses the maximum Y value across all scans as the target.
-                                         Default is False.
-        viz (bool, optional): If True, a plot will be shown comparing the original and scaled scans. 
-                              Default is False.
-    
-    Returns:
-        tuple: The original Xs arrays and the scaled Ys arrays.
-    """
-    # Determine the target Y peak value
-    if use_global_max:
-        target_y_peak = max(np.max(Y) for Y in Ys)
-    
+def align_peak_y_to_value(Xs, Ys, target_y_peak: float | None = None, use_global_max: bool = True, viz: bool = False):
     if target_y_peak is None:
-        raise ValueError("Either target_y_peak must be specified, or use_global_max must be True.")
-    
-    # Scale each Y array to align its peak with the target Y peak value
-    for i, (X, Y) in enumerate(zip(Xs, Ys)):
-        max_y = np.max(Y)
-        scale_factor = target_y_peak / max_y
-        Y_scaled = Y * scale_factor
-        if viz:
-            plt.figure(figsize=(8, 4))
-            plt.plot(X, Y, color='tab:blue', label='Original')
-            plt.plot(X, Y_scaled, color='tab:orange', label='Scaled')
-            plt.axhline(max_y, color='tab:blue', linestyle='--', linewidth=1, label=f'Original Peak Y: {max_y:.4f}')
-            plt.axhline(target_y_peak, color='tab:orange', linestyle='--', linewidth=1, label=f'Target Y Peak: {target_y_peak:.4f}')
-            plt.yscale('log')
-            plt.legend()
-            plt.title(f'Y Peak Aligned: {max_y:.4f} -> {target_y_peak:.4f}')
-            plt.show()
-        Ys[i] = Y_scaled
-    return Xs, Ys
+        target_y_peak = max(float(np.nanmax(y)) for y in Ys) if use_global_max else 1.0
+    out_ys = []
+    for y in Ys:
+        y = np.asarray(y, dtype=float)
+        peak_y = float(np.nanmax(y))
+        out_ys.append(y if peak_y == 0 else y * (target_y_peak / peak_y))
+    return Xs, out_ys
 
 
+def process_input(inputs):
+    """Validate tuple input `(Xs, Ys, length_list)` for plotting."""
+    if not isinstance(inputs, tuple) or len(inputs) != 3:
+        raise ValueError("inputs must be a tuple: (Xs, Ys, length_list)")
+    xs, ys, lengths = inputs
+    if not isinstance(xs, list) or not isinstance(ys, list) or not isinstance(lengths, list):
+        raise ValueError("Xs, Ys, and length_list must all be lists")
+    return xs, ys, lengths
 
-def process_input(input_data: Union[str, List[str], Tuple[List, List, List]]):
-    """
-    Process input data for XRD analysis based on its type.
 
-    This function handles three types of input:
-    1. A single file path (string)
-    2. A list of file paths
-    3. A tuple containing Xs, Ys, and length_list (pre-loaded data)
+def find_peaks_table(
+    scan: pd.DataFrame,
+    windows: dict[str, tuple[float, float]] | None = None,
+    prominence: float | None = None,
+) -> pd.DataFrame:
+    x = scan["angle"].to_numpy(float)
+    y = scan["intensity"].to_numpy(float)
+    windows = {"full_scan": (float(np.nanmin(x)), float(np.nanmax(x)))} if windows is None else windows
+    rows = []
+    for label, (lo, hi) in windows.items():
+        mask = (x >= lo) & (x <= hi) & np.isfinite(y)
+        if not mask.any():
+            continue
+        peak_x, peak_y = detect_peaks(x[mask], y[mask], num_peaks=1, prominence=prominence or 0.1)
+        fwhm, *_ = calculate_fwhm(x[mask], y[mask], peak_x[0])
+        rows.append(
+            {
+                "window": label,
+                "two_theta_deg": float(peak_x[0]),
+                "intensity": float(peak_y[0]),
+                "fwhm_deg": fwhm,
+                "source": scan["source"].iloc[0],
+            }
+        )
+    return pd.DataFrame(rows)
 
-    Args:
-        input_data (Union[str, List[str], Tuple[List, List, List]]): 
-            The input data to be processed. Can be:
-            - A string representing a single file path.
-            - A list of strings, each representing a file path.
-            - A tuple of three lists (Xs, Ys, length_list).
 
-    Returns:
-        tuple: A tuple containing Xs, Ys, and length_list, either loaded from files or directly from the input.
+def two_theta_to_d(two_theta_deg: float, wavelength_angstrom: float = 1.5406) -> float:
+    theta = math.radians(two_theta_deg / 2)
+    return wavelength_angstrom / (2 * math.sin(theta))
 
-    Raises:
-        ValueError: If the input type is not recognized or if the tuple doesn't contain exactly three lists.
-    
-    Notes:
-        - For file inputs, the function loads the data using the `load_xrd_scans` function.
-        - If a single file path is provided, it's converted to a list before processing.
-    """
-    if isinstance(input_data, str):
-        # Single file path
-        return load_xrd_scans([input_data])
-    elif isinstance(input_data, list):
-        # List of file paths
-        return load_xrd_scans(input_data)
-    elif isinstance(input_data, tuple) and len(input_data) == 3:
-        # Tuple of Xs, Ys, and length_list
-        if all(isinstance(item, list) for item in input_data):
-            return input_data
-        else:
-            raise ValueError("Tuple must contain three lists")
-    else:
-        raise ValueError("Invalid input type")
-    
 
-def detect_fringes_thickness(
-    angle, intensity, wavelength=1.5406, fringe_range=(44, 45.5),
-    prominence=0.01, min_distance_deg=0.1, mode="both"
-):
-    """
-    Estimate thin film thickness from XRD Kiessig fringes using either FFT or peak-finding method.
+def lattice_from_peak(two_theta_deg: float, hkl=(0, 0, 2), wavelength_angstrom: float = 1.5406) -> float:
+    d = two_theta_to_d(two_theta_deg, wavelength_angstrom=wavelength_angstrom)
+    h, k, l = hkl
+    if h == 0 and k == 0 and l != 0:
+        return d * abs(l)
+    return d * math.sqrt(h * h + k * k + l * l)
 
-    Parameters:
-        angle (array): Omega or 2Theta angles in degrees.
-        intensity (array): Corresponding XRD intensity values.
-        wavelength (float): X-ray wavelength in Å (default is Cu Kα: 1.5406 Å).
-        fringe_range (tuple): Angle range to search for fringes.
-        prominence (float): Prominence threshold for peak detection.
-        min_distance_deg (float): Minimum distance between peaks (in degrees).
-        mode (str): "fft", "peak", or "both".
-
-    Returns:
-        dict: Thickness estimates and intermediate values.
-    """
-
-    # --- Focused region ---
-    mask = (angle >= fringe_range[0]) & (angle <= fringe_range[1])
-    angle_roi = angle[mask]
-    intensity_roi = intensity[mask]
-
-    # Interpolate to uniform grid
-    angle_uniform = np.linspace(angle_roi.min(), angle_roi.max(), 1000)
-    intensity_interp = np.interp(angle_uniform, angle_roi, intensity_roi)
-    intensity_log = np.log10(intensity_interp + 1)
-
-    # Remove smooth background (2nd-order polynomial)
-    coeffs = np.polyfit(angle_uniform, intensity_log, deg=2)
-    background = np.polyval(coeffs, angle_uniform)
-    intensity_detrended = intensity_log - background
-
-    results = {}
-
-    # --- FFT method ---
-    if mode in ["fft", "both"]:
-        fft_vals = np.abs(fft(intensity_detrended - np.mean(intensity_detrended)))
-        freqs = fftfreq(len(angle_uniform), angle_uniform[1] - angle_uniform[0])
-        pos_mask = freqs > 0
-        fft_vals = fft_vals[pos_mask]
-        freqs = freqs[pos_mask]
-
-        dominant_freq = freqs[np.argmax(fft_vals)]
-        delta_theta_fft = 1 / dominant_freq
-        avg_theta_rad = np.deg2rad((angle_roi.min() + angle_roi.max()) / 2)
-
-        # Approximate thickness using small-angle assumption (optional)
-        thickness_fft_angstrom = wavelength / (2 * delta_theta_fft * np.cos(avg_theta_rad))
-
-        # Plot FFT
-        plt.figure(figsize=(5, 3))
-        plt.plot(freqs, fft_vals)
-        plt.xlabel("Frequency (1/degree)")
-        plt.ylabel("FFT Amplitude")
-        plt.title("FFT of Log(Intensity) (Fringe Periodicity)")
-        plt.grid(True)
-        plt.show()
-
-        results['FFT Delta 2Theta (deg)'] = delta_theta_fft
-        results['FFT Thickness (nm)'] = thickness_fft_angstrom / 10
-
-    # --- Peak finding method ---
-    if mode in ["peak", "both"]:
-        min_distance_pts = int(min_distance_deg / (angle_uniform[1] - angle_uniform[0]))
-        peaks, _ = find_peaks(intensity_log, prominence=prominence, distance=min_distance_pts)
-        peak_angles = angle_uniform[peaks]
-
-        if len(peak_angles) > 1:
-            theta_rad_peaks = np.deg2rad(peak_angles / 2)  # Convert 2θ to θ in radians
-            sin_theta = np.sin(theta_rad_peaks)
-            delta_sin_theta_array = np.diff(sin_theta)
-
-            # Compute individual thickness values (in Å)
-            thickness_array_angstrom = wavelength / (2 * delta_sin_theta_array)
-
-            # Optional: Convert to nm
-            thickness_array_nm = thickness_array_angstrom / 10
-
-            # Summary stats
-            thickness_mean_nm = np.mean(thickness_array_nm)
-            thickness_std_nm = np.std(thickness_array_nm)
-        else:
-            delta_sin_theta_array = None
-            thickness_array_nm = None
-            thickness_mean_nm = None
-            thickness_bounds = None
-
-        # Plot log intensity with detected peaks
-        plt.figure(figsize=(5, 3))
-        plt.plot(angle_uniform, intensity_log, label='Log(Intensity)')
-        if len(peak_angles) > 0:
-            plt.plot(peak_angles, intensity_log[peaks], 'ro', label='Detected Fringes')
-        plt.xlabel("Angle (degree)")
-        plt.ylabel("Log Intensity (a.u.)")
-        plt.title("Fringe Detection in XRD (Log Scale)")
-        plt.legend()
-        plt.grid(True)
-        plt.show()
-
-        # Save results
-        results['Peak Find Delta sin(Theta)'] = delta_sin_theta_array.tolist() if delta_sin_theta_array is not None else None
-        results['Peak Find Thickness (nm)'] = thickness_array_nm.tolist()
-    # print(f"Results: {results}")
-    return results

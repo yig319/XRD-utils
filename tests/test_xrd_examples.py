@@ -161,6 +161,16 @@ def test_plot_xrd_random_demo_visualization(xrd_modules, no_show, tmp_path):
     assert output.stat().st_size > 0
 
 
+def test_render_xrd_preview_returns_backend_and_figure(xrd_modules, no_show):
+    _, xrd_viz, _ = xrd_modules
+
+    backend, fig = xrd_viz.render_xrd_preview("synthetic_scan.xrdml")
+
+    assert backend == "xrd_utils.xrd_viz.plot_xrd"
+    assert fig is not None
+    assert len(fig.axes[0].lines) == 1
+
+
 def test_rsm_plotter_random_demo_visualization(xrd_modules, no_show, tmp_path):
     _, _, rsm_viz = xrd_modules
     plotter = rsm_viz.RSMPlotter(
@@ -179,3 +189,13 @@ def test_rsm_plotter_random_demo_visualization(xrd_modules, no_show, tmp_path):
     assert len(ax.collections) > 0
     assert output.exists()
     assert output.stat().st_size > 0
+
+
+def test_render_rsm_preview_returns_backend_and_figure(xrd_modules, no_show):
+    _, _, rsm_viz = xrd_modules
+
+    backend, fig = rsm_viz.render_rsm_preview("synthetic_map.xrdml")
+
+    assert backend == "xrd_utils.rsm_viz.RSMPlotter.plot"
+    assert fig is not None
+    assert len(fig.axes[0].collections) > 0
