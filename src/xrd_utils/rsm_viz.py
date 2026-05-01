@@ -6,6 +6,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import colors, ticker
+from sci_viz_utils.figures import layout_fig, set_axis_labels
 
 
 class RSMPlotter:
@@ -37,7 +38,7 @@ class RSMPlotter:
 
     def plot(self, file, ax=None, cbar_ax=None, reciprocal_space=True):
         if ax is None:
-            _, ax = plt.subplots(figsize=(5, 4))
+            _, ax = layout_fig(1, mod=1, figsize=(5, 4), layout=None)
         omega, two_theta, intensity = self.load_map(file)
         if reciprocal_space:
             qx, qz = self.to_reciprocal_space(
@@ -46,13 +47,13 @@ class RSMPlotter:
                 wavelength=self.plot_params.get("wavelength", 1.5406),
             )
             x, z = qx, qz
-            ax.set_xlabel("Qx (1/A)")
-            ax.set_ylabel("Qz (1/A)")
+            xlabel = "Qx (1/A)"
+            ylabel = "Qz (1/A)"
         else:
             x, z = omega, two_theta
             qx, qz = x, z
-            ax.set_xlabel("Omega (deg)")
-            ax.set_ylabel("2theta (deg)")
+            xlabel = "Omega (deg)"
+            ylabel = "2theta (deg)"
 
         vmin = self.plot_params.get("vmin", np.nanpercentile(intensity, 1))
         vmax = self.plot_params.get("vmax", np.nanpercentile(intensity, 99.5))
@@ -69,8 +70,13 @@ class RSMPlotter:
             ax.set_xlim(*self.plot_params["xlim"])
         if self.plot_params.get("ylim"):
             ax.set_ylim(*self.plot_params["ylim"])
-        if self.plot_params.get("title"):
-            ax.set_title(self.plot_params["title"])
+        set_axis_labels(
+            ax,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            title=self.plot_params.get("title"),
+            yaxis_style=None,
+        )
         if cbar_ax is not False:
             ax.figure.colorbar(contour, ax=ax, cax=cbar_ax)
         return qx, qz, intensity
@@ -78,8 +84,20 @@ class RSMPlotter:
 
 def render_rsm_preview(file_path: str | Path, *, plot_params=None) -> tuple[str, Any]:
     """Render one reciprocal-space map with the compact preview style used by GUIs."""
-    figure, axis = plt.subplots(figsize=(6, 5))
+    figure, axis = layout_fig(1, mod=1, figsize=(6, 5), layout=None)
     plotter = RSMPlotter(plot_params=plot_params)
     plotter.plot(file_path, ax=axis)
     figure.tight_layout()
     return "xrd_utils.rsm_viz.RSMPlotter.plot", figure
+
+
+def plot_rsm(file, *, ax=None, reciprocal_space=True, title=None, wavelength=1.5406):
+    """Plot an XRD reciprocal-space map using the migrated PlumeDynamics API."""
+
+    plotter = RSMPlotter(plot_params={"title": title, "wavelength": wavelength})
+    qx, qz, intensity = plotter.plot(
+        file,
+        ax=ax,
+        reciprocal_space=reciprocal_space,
+    )
+    return qx, qz, intensity

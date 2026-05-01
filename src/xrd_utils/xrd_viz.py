@@ -5,7 +5,7 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
-from sci_viz_utils.figures import set_axis_labels
+from sci_viz_utils.figures import layout_fig, set_axis_labels
 
 from xrd_utils.xrd_utils import load_xrd_scans, process_input
 
@@ -28,7 +28,7 @@ def plot_xrd(
     """Plot one or more XRD scans from `(Xs, Ys, length_list)` input."""
     xs, ys, _lengths = process_input(inputs)
     if ax is None:
-        fig, ax = plt.subplots(figsize=(6, 4))
+        fig, ax = layout_fig(1, mod=1, figsize=(6, 4))
     if colors is None:
         colors = [None] * len(ys)
 
@@ -59,9 +59,50 @@ def plot_xrd(
     return fig, ax
 
 
+def plot_xrd_files(
+    files,
+    labels,
+    *,
+    ax=None,
+    title=None,
+    xrange=(0, 90),
+    diff=1e3,
+    pad_sequence=None,
+    save_file=None,
+):
+    """Plot one or more XRD files using the migrated PlumeDynamics convenience API.
+
+    Parameters mirror the old ``plume_dynamics.materials.xrd.plot_xrd`` helper,
+    while internally using the XRD-utils loading and plotting stack.
+    """
+
+    inputs = load_xrd_scans(files)
+    xs, ys, lengths = inputs
+    if pad_sequence:
+        ys = [
+            np.pad(y, pad_sequence[index], mode="median")
+            for index, y in enumerate(ys)
+        ]
+        inputs = (xs, ys, lengths)
+
+    fig = ax.figure if ax is not None else None
+    fig, ax = plot_xrd(
+        inputs,
+        labels,
+        title=title,
+        xrange=xrange,
+        diff=diff,
+        fig=fig,
+        ax=ax,
+    )
+    if save_file:
+        fig.savefig(save_file, dpi=300, bbox_inches="tight")
+    return fig, ax
+
+
 def plot_stacked_scans(scans, ax=None, normalize: bool = True, offset: float = 1.2, xlim=None):
     if ax is None:
-        _, ax = plt.subplots(figsize=(6, 4))
+        _, ax = layout_fig(1, mod=1, figsize=(6, 4))
     for i, (name, df) in enumerate(scans.items()):
         x = df["angle"].to_numpy(float)
         y = df["intensity"].to_numpy(float)
@@ -79,7 +120,7 @@ def plot_stacked_scans(scans, ax=None, normalize: bool = True, offset: float = 1
 
 def render_xrd_preview(file_path: str | Path, *, label: str | None = None) -> tuple[str, Any]:
     """Render one XRD scan with the compact preview style used by GUIs."""
-    figure, axis = plt.subplots(figsize=(6, 4))
+    figure, axis = layout_fig(1, mod=1, figsize=(6, 4))
     plot_xrd(
         load_xrd_scans([file_path]),
         [label or Path(file_path).name],

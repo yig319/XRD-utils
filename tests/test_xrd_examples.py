@@ -161,6 +161,25 @@ def test_plot_xrd_random_demo_visualization(xrd_modules, no_show, tmp_path):
     assert output.stat().st_size > 0
 
 
+def test_plot_xrd_files_migrated_convenience(xrd_modules, no_show, tmp_path):
+    _, xrd_viz, _ = xrd_modules
+
+    fig, ax = xrd_viz.plot_xrd_files(
+        ["synthetic_scan_a.xrdml", "synthetic_scan_b.xrdml"],
+        ["scan A", "scan B"],
+        xrange=(42, 48),
+        diff=None,
+    )
+
+    output = tmp_path / "xrd_files_plot.png"
+    fig.savefig(output, dpi=100)
+
+    assert len(ax.lines) == 2
+    assert output.exists()
+    assert output.stat().st_size > 0
+
+
+
 def test_render_xrd_preview_returns_backend_and_figure(xrd_modules, no_show):
     _, xrd_viz, _ = xrd_modules
 
@@ -189,6 +208,21 @@ def test_rsm_plotter_random_demo_visualization(xrd_modules, no_show, tmp_path):
     assert len(ax.collections) > 0
     assert output.exists()
     assert output.stat().st_size > 0
+
+
+def test_plot_rsm_migrated_convenience(xrd_modules, no_show):
+    _, _, rsm_viz = xrd_modules
+
+    qx, qz, intensity = rsm_viz.plot_rsm(
+        "synthetic_map.xrdml",
+        reciprocal_space=True,
+        title="Migrated RSM",
+    )
+
+    assert qx.shape == qz.shape == intensity.shape
+    assert qx.ndim == 2
+    assert np.isfinite(intensity).all()
+
 
 
 def test_render_rsm_preview_returns_backend_and_figure(xrd_modules, no_show):

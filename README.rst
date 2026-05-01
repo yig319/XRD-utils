@@ -88,8 +88,10 @@ Features
 
 - Peak detection and alignment utilities for XRD scans.
 - FWHM estimation and fringe-based thickness estimation helpers.
-- Visualization for stacked 1D XRD scans.
+- Visualization for stacked 1D XRD scans and file-based scan plotting.
 - Reciprocal space mapping (RSM) plotting tools.
+- Migrated convenience helpers from PlumeDynamics:
+  ``plot_xrd_files`` and ``plot_rsm``.
 
 Documentation
 =============

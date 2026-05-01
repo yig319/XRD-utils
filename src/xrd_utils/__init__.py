@@ -15,9 +15,11 @@ except PackageNotFoundError:  # pragma: no cover
 
 from xrd_utils.xrd_utils import *  # noqa: F401,F403,E402
 from xrd_utils.xrd_viz import *  # noqa: F401,F403,E402
+from xrd_utils.xrd_viz import plot_xrd_files  # noqa: F401,E402
 
 try:
     from xrd_utils.rsm_viz import *  # noqa: F401,F403,E402
+    from xrd_utils.rsm_viz import plot_rsm  # noqa: F401,E402
 except Exception:
     pass
 
