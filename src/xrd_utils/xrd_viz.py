@@ -21,11 +21,19 @@ def plot_xrd(
     ax=None,
     yscale="log",
     legend_style="legend",
+    legend_ncol: int | str = "auto",
     colors=None,
     grid=False,
     text_offset_ratio=(1.0, 1.0),
 ):
-    """Plot one or more XRD scans from `(Xs, Ys, length_list)` input."""
+    """Plot one or more XRD scans from `(Xs, Ys, length_list)` input.
+
+    Parameters
+    ----------
+    legend_ncol : int or ``"auto"``
+        Number of legend columns.  ``"auto"`` (default) splits into 2–4
+        columns when there are many labels, keeping the legend compact.
+    """
     xs, ys, _lengths = process_input(inputs)
     if ax is None:
         fig, ax = layout_fig(1, mod=1, figsize=(6, 4))
@@ -43,9 +51,9 @@ def plot_xrd(
             text_y = np.nanmax(y * scale) * text_offset_ratio[1]
             ax.text(text_x, text_y, label, fontsize=8, ha="right")
 
-    set_axis_labels(ax, xlabel="2theta or scan angle (deg)", ylabel="Intensity (a.u.)")
     if yscale:
         ax.set_yscale(yscale)
+    set_axis_labels(ax, xlabel="2theta or scan angle (deg)", ylabel="Intensity (a.u.)")
     if xrange:
         ax.set_xlim(*xrange)
     if yrange:
@@ -55,7 +63,18 @@ def plot_xrd(
     if grid:
         ax.grid(True, alpha=0.25)
     if legend_style == "legend":
-        ax.legend(frameon=False, fontsize=8)
+        ncol = legend_ncol
+        if ncol == "auto":
+            n_cols = len(labels)
+            if n_cols <= 3:
+                ncol = 1
+            elif n_cols <= 6:
+                ncol = 2
+            elif n_cols <= 12:
+                ncol = 3
+            else:
+                ncol = 4
+        ax.legend(frameon=False, fontsize=8, ncol=ncol)
     return fig, ax
 
 
@@ -66,6 +85,7 @@ def plot_xrd_files(
     ax=None,
     title=None,
     xrange=(0, 90),
+    yrange=None,
     diff=1e3,
     pad_sequence=None,
     save_file=None,
@@ -91,6 +111,7 @@ def plot_xrd_files(
         labels,
         title=title,
         xrange=xrange,
+        yrange=yrange,
         diff=diff,
         fig=fig,
         ax=ax,
@@ -98,24 +119,6 @@ def plot_xrd_files(
     if save_file:
         fig.savefig(save_file, dpi=300, bbox_inches="tight")
     return fig, ax
-
-
-def plot_stacked_scans(scans, ax=None, normalize: bool = True, offset: float = 1.2, xlim=None):
-    if ax is None:
-        _, ax = layout_fig(1, mod=1, figsize=(6, 4))
-    for i, (name, df) in enumerate(scans.items()):
-        x = df["angle"].to_numpy(float)
-        y = df["intensity"].to_numpy(float)
-        y = np.where(y <= 0, np.nan, y)
-        if normalize and np.nanmax(y) > 0:
-            y = y / np.nanmax(y)
-        ax.semilogy(x, y * (offset**i), label=name, linewidth=1.2)
-    set_axis_labels(ax, xlabel="2theta or scan angle (deg)", ylabel="Intensity (a.u.)")
-    if xlim:
-        ax.set_xlim(*xlim)
-    if scans:
-        ax.legend(frameon=False, fontsize=8)
-    return ax
 
 
 def render_xrd_preview(file_path: str | Path, *, label: str | None = None) -> tuple[str, Any]:
@@ -131,3 +134,4 @@ def render_xrd_preview(file_path: str | Path, *, label: str | None = None) -> tu
     )
     figure.tight_layout()
     return "xrd_utils.xrd_viz.plot_xrd", figure
+
